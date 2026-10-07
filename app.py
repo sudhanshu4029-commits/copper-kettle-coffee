@@ -1,5 +1,5 @@
 """
-Copper Kettle Coffee — AI order-taking assistant (Streamlit + Gemini).
+Two Wishes Coffee — AI order-taking assistant (Streamlit + Groq, with Gemini as a fallback).
 
 Run locally:   streamlit run app.py
 Deploy:        see README.md (Streamlit Community Cloud, free)
@@ -9,10 +9,9 @@ import time
 from typing import Optional
 
 import streamlit as st
-from google import genai
-from google.genai import errors, types
 
 import order_engine as eng
+from llm_groq import GroqFailure, run_turn
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 IMG_DIR = os.path.join(APP_DIR, "images")
@@ -23,7 +22,7 @@ DEFAULT_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash
 MAX_USER_CHARS = 500
 HISTORY_LIMIT = 60
 
-st.set_page_config(page_title="Copper Kettle Coffee · Order with Mira", page_icon="☕", layout="wide")
+st.set_page_config(page_title=f"{eng.MENU['cafe_name']} · Order with Mira", page_icon="☕", layout="wide")
 
 # ------------------------------------------------------------------ styling
 st.markdown("""
@@ -67,6 +66,7 @@ ss = st.session_state
 ss.setdefault("order", eng.new_state())
 ss.setdefault("messages", [])        # what the UI shows
 ss.setdefault("history", [])         # what Gemini sees (includes tool calls)
+ss.setdefault("groq_history", [])    # what Groq sees (OpenAI-style messages)
 ss.setdefault("turn_added", [])
 ss.setdefault("turn_receipt", None)
 ss.setdefault("model_in_use", None)
@@ -257,6 +257,9 @@ def trim_history(history):
 
 
 def ask_gemini(user_text, api_key):
+    from google import genai
+    from google.genai import errors, types
+
     client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
@@ -303,6 +306,45 @@ def ask_gemini(user_text, api_key):
                     continue
                 return "I lost my connection for a moment. Your cart is safe. Please try again or use the **Menu** tab."
     return f"No Gemini model was available for this API key. Set GEMINI_MODEL in secrets. ({last_error})"
+
+
+FUNCTIONS = {f.__name__: f for f in TOOLS}
+
+
+def ask_groq(user_text, api_key):
+    message = f"{cart_context()}\n{user_text}"
+    try:
+        text, history, model = run_turn(api_key, SYSTEM_PROMPT, ss.groq_history, message, FUNCTIONS,
+                                        preferred_model=get_secret("GROQ_MODEL"))
+    except GroqFailure as e:
+        if e.kind == "key":
+            return "My connection to the AI service isn't set up correctly (API key problem). Please tell the café staff."
+        if e.kind == "rate":
+            return ("I'm getting a lot of orders right now and hit the free API limit. "
+                    "Please wait about a minute, or tap items in the **Menu** tab; your cart still works.")
+        return "The AI service is having trouble right now. Your cart is safe; you can keep ordering from the **Menu** tab."
+    ss.groq_history = history
+    ss.model_in_use = model
+    return text or "Sorry, I didn't quite catch that. Could you say it another way?"
+
+
+def ai_provider():
+    if get_secret("GROQ_API_KEY"):
+        return "groq", get_secret("GROQ_API_KEY").strip()
+    if get_secret("GEMINI_API_KEY"):
+        return "gemini", get_secret("GEMINI_API_KEY").strip()
+    return None, None
+
+
+def provider_label():
+    return {"groq": "Groq", "gemini": "Google Gemini"}.get(ai_provider()[0], "an AI service")
+
+
+def ask_ai(user_text):
+    provider, key = ai_provider()
+    if provider == "groq":
+        return ask_groq(user_text, key)
+    return ask_gemini(user_text, key)
 
 
 # ------------------------------------------------------------------ sidebar: live order + checkout
@@ -363,12 +405,12 @@ def render_sidebar():
         if ss.barista_requests:
             st.caption("Open barista requests: " + ", ".join(r["ticket"] for r in ss.barista_requests))
         if st.button("Reset conversation", width="stretch"):
-            for k in ("messages", "history", "barista_requests"):
+            for k in ("messages", "history", "groq_history", "barista_requests"):
                 ss[k] = []
             ss.order = eng.new_state()
             st.rerun()
-        st.caption("Mira is an AI assistant powered by Google Gemini and can make mistakes. Please check your order "
-                   "summary before confirming. Your chat messages are sent to Google's Gemini API to generate replies. "
+        st.caption(f"Mira is an AI assistant powered by {provider_label()} and can make mistakes. Please check your order "
+                   f"summary before confirming. Your chat messages are sent to {provider_label()}'s API to generate replies. "
                    "Don't share personal details beyond a first name. Demo app with sample menu data.")
         if ss.model_in_use:
             st.caption(f"Model: {ss.model_in_use}")
@@ -450,10 +492,10 @@ SUGGESTIONS = ["What do you recommend for a cold, not-too-sweet coffee?",
                "Mujhe ek filter coffee aur paneer sandwich chahiye"]
 
 
-def render_chat(api_key, prompt):
+def render_chat(prompt):
     if not ss.messages:
         render_message({"role": "assistant", "content":
-                        "Hi! I'm **Mira**, Copper Kettle's AI ordering assistant. Tell me what you'd like, ask for a "
+                        f"Hi! I'm **Mira**, the AI ordering assistant at {eng.MENU['cafe_name']}. Tell me what you'd like, ask for a "
                         "recommendation, or browse the **Menu** tab. I'll keep a running total on the left."})
         st.caption("Try one of these:")
         cols = st.columns(2)
@@ -473,8 +515,9 @@ def render_chat(api_key, prompt):
     if len(prompt) > MAX_USER_CHARS:
         st.warning(f"That message is a bit long. Please keep it under {MAX_USER_CHARS} characters.")
         return
-    if not api_key:
-        st.error("No Gemini API key found. Add GEMINI_API_KEY to the app secrets (see README).")
+    if not ai_provider()[0]:
+        st.error("Mira isn't connected yet. The café owner needs to add GROQ_API_KEY in the app secrets (see README). "
+                 "You can still order from the **Menu** tab.")
         return
 
     ss.messages.append({"role": "user", "content": prompt})
@@ -482,19 +525,13 @@ def render_chat(api_key, prompt):
     ss.turn_added, ss.turn_receipt = [], None
     with st.chat_message("assistant", avatar="☕"):
         with st.spinner("Mira is on it…"):
-            reply = ask_gemini(prompt, api_key)
+            reply = ask_ai(prompt)
     ss.messages.append({"role": "assistant", "content": reply, "images": list(ss.turn_added),
                         "receipt": ss.turn_receipt})
     st.rerun()
 
 
 # ------------------------------------------------------------------ page
-api_key = get_secret("GEMINI_API_KEY")
-if not api_key:
-    with st.sidebar:
-        api_key = st.text_input("Gemini API key (local testing)", type="password",
-                                help="Get a free key at aistudio.google.com/apikey")
-
 render_sidebar()
 
 st.markdown(f"""<div class="ck-hero"><div class="ck-title">{eng.MENU['cafe_name']}</div>
@@ -508,4 +545,4 @@ tab_chat, tab_menu = st.tabs(["☕ Order with Mira", "📋 Menu"])
 with tab_menu:
     render_menu()
 with tab_chat:
-    render_chat(api_key, prompt)
+    render_chat(prompt)
