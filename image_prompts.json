@@ -1,0 +1,25 @@
+{
+ "style": "Professional food photograph for a caf\u00e9 menu. Single serving, centred, 45-degree angle, on a light oak caf\u00e9 table, soft natural window light from the left, shallow depth of field, plain softly blurred background, no text, no logos, no hands, square 1:1.",
+ "subjects": {
+  "espresso": "a double espresso with thick hazelnut crema in a small white ceramic demitasse cup on a saucer",
+  "americano": "a hot Americano, black coffee in a matte dark-green ceramic mug",
+  "cappuccino": "a cappuccino in a wide white cup and saucer with thick milk foam dusted with cocoa powder",
+  "latte": "a caf\u00e9 latte in a large white cup with a rosetta latte art pattern",
+  "flat_white": "a flat white in a small white cup with a glossy microfoam heart latte art",
+  "mocha": "a caf\u00e9 mocha in a terracotta-coloured cup with chocolate sauce swirled on top and a few chocolate shavings",
+  "caramel_macchiato": "an iced caramel macchiato in a tall clear glass showing milk at the bottom and espresso on top, ice cubes, caramel crosshatch drizzle, green paper straw",
+  "cold_brew": "a cold brew coffee in a tall clear glass over large ice cubes, dark amber colour, dark green paper straw",
+  "iced_latte": "an iced latte in a tall clear glass with espresso swirling into cold milk over ice, paper straw",
+  "filter_coffee": "South Indian filter coffee served in a stainless steel tumbler set inside a steel davara bowl, frothy top, light steam",
+  "croissant": "a golden flaky butter croissant on a small white plate",
+  "blueberry_muffin": "a blueberry muffin with a crumble top in a blue paper liner on a small white plate",
+  "choc_chip_cookie": "two large chewy chocolate chip cookies with dark chocolate chunks on a small white plate",
+  "brownie": "two square fudge brownies with a crackly top on a small white plate",
+  "banana_bread": "a thick slice of banana walnut bread on a small white plate",
+  "cinnamon_roll": "a cinnamon roll with white cream-cheese glaze drizzled on top, on a small white plate",
+  "paneer_sandwich": "a toasted multigrain sandwich cut into triangles, filled with orange tandoori paneer cubes, onion and green mint chutney, on a white plate",
+  "chicken_pesto_sandwich": "a sourdough sandwich cut in half filled with grilled chicken, green basil pesto and tomato slices, on a white plate",
+  "almond_biscotti": "four almond biscotti slices with visible whole almonds, on a small white plate",
+  "granola_cup": "a clear glass cup layered with thick Greek yogurt, honey granola and fresh berries, wooden spoon"
+ }
+}
